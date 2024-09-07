@@ -69,7 +69,7 @@ function upload_file(local_path::AbstractString; extra_body=Dict())
     upload_url = get(response, :upload_url, nothing)
     file_id = get(response, :file_id, nothing)
     if upload_url === nothing || file_id === nothing
-        @maybe_catch begin
+        @maybecatch begin
             throw(SlackError("Unexpected error: response missing `upload_url` or `file_id` fields"))
         end "Error when parsing Slack API response"
     end
