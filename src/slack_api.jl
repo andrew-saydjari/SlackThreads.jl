@@ -66,13 +66,18 @@ function upload_file(local_path::AbstractString; extra_body=Dict())
         end "Error reported by Slack API"
     end
 
-    upload_url = response[:upload_url]
-    file_data = read(local_path)
-    upload_response = @maybecatch begin
-        @mock HTTP.post(upload_url, [], file_data)
+    upload_url = get(response, :upload_url, nothing)
+    file_id = get(response, :file_id, nothing)
+    if upload_url === nothing || file_id === nothing
+        @maybe_catch begin
+            throw(SlackError("Unexpected error: response missing `upload_url` or `file_id` fields"))
+        end "Error when parsing Slack API response"
+    end
+
+   upload_response = @maybecatch begin
+        @mock HTTP.post(upload_url, [], read(local_path))
     end "Error when attempting to upload file to Slack"
 
-    file_id = response[:file_id]
 
     api = "https://slack.com/api/files.completeUploadExternal"
     response = @maybecatch begin
