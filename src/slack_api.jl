@@ -75,7 +75,7 @@ function upload_file(local_path::AbstractString; extra_body=Dict())
 
     api = "https://slack.com/api/files.completeUploadExternal"
     response = @maybecatch begin
-        body = HTTP.Form(vcat(collect(extra_body), ["channel_id" => thread.channel, "token" => token, "files" => JSON3.write([Dict("id" => file_id)])]))
+        body = HTTP.Form(vcat(collect(extra_body), ["channel_id" => extra_body["channels"], "token" => token, "files" => JSON3.write([Dict("id" => file_id)])]))
         response = @mock HTTP.post(api, headers, body)
         JSON3.read(response.body)
     end "Error when attempting to upload file to Slack"
