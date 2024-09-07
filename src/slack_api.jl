@@ -38,7 +38,7 @@ function local_file(name, object; dir=mktempdir())
 end
 
 function upload_file(local_path::AbstractString; extra_body=Dict())
-    api = "https://slack.com/api/files.upload"
+    api = "https://slack.com/api/files.getUploadURLExternal"
 
     token = get(ENV, "SLACK_TOKEN", nothing)
     if token === nothing
@@ -48,16 +48,37 @@ function upload_file(local_path::AbstractString; extra_body=Dict())
         @debug "Uploading slack file" api local_path
     end
 
-    headers = ["Authorization" => "Bearer $(token)"]
+    headers = []
+
+    len_upload = string(stat(local_path).size)
     response = @maybecatch begin
-        open(local_path, "r") do file
-            body = HTTP.Form(vcat(collect(extra_body), ["file" => file]))
-            response = @mock HTTP.post(api, headers, body)
-            return JSON3.read(response.body)
-        end
+        body = HTTP.Form(vcat(collect(extra_body), ["token" => token, "filename" => local_path, "length" => len_upload]))
+        response = @mock HTTP.post(api, headers, body)
+        JSON3.read(response.body)
     end "Error when attempting to upload file to Slack"
 
-    response === nothing && return nothing
+    if haskey(response, :ok) === true && response[:ok] != true
+        return @maybecatch begin
+            err = haskey(response, :error) ? string(response.error) :
+                  "No error field returned"
+            throw(SlackError(err))
+        end "Error reported by Slack API"
+    end
+
+    upload_url = response[:upload_url]
+    file_data = read(local_path)
+    upload_response = @maybecatch begin
+        @mock HTTP.post(upload_url, [], file_data)
+    end "Error when attempting to upload file to Slack"
+
+    file_id = response[:file_id]
+
+    api = "https://slack.com/api/files.completeUploadExternal"
+    response = @maybecatch begin
+        body = HTTP.Form(vcat(collect(extra_body), ["channel_id" => thread.channel, "token" => token, "files" => JSON3.write([Dict("id" => file_id)])]))
+        response = @mock HTTP.post(api, headers, body)
+        JSON3.read(response.body)
+    end "Error when attempting to upload file to Slack"
 
     if haskey(response, :ok) === true && response[:ok] != true
         return @maybecatch begin
